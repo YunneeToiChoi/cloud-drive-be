@@ -22,22 +22,30 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
-	// Parse command-line flags
+	// Parse command-line flags (chỉ ghi đè nếu cung cấp)
 	flag.IntVar(&cfg.Port, "port", cfg.Port, "API Gateway port")
 	flag.Parse()
+
+	// Log thông tin môi trường
+	log.Printf("Starting API Gateway in %s environment with host mode: %s", cfg.Environment, cfg.HostMode)
 
 	// Create router
 	router := mux.NewRouter()
 
-	// Create user service client
-	userClient, err := clients.NewUserClient(cfg.ConsulURL, cfg.UserServiceURL)
+	// Create user service client - sử dụng fallback URL chỉ khi không thể kết nối Consul
+	fallbackURL := "localhost:9001"
+	if cfg.HostMode == "docker" {
+		fallbackURL = "user-service:9001"
+	}
+
+	userClient, err := clients.NewUserClient(cfg.ConsulURL, fallbackURL)
 	if err != nil {
 		log.Fatalf("Failed to create user service client: %v", err)
 	}
 	defer userClient.Close()
 
 	// Create service router
-	serviceRouter, err := handlers.NewServiceRouter(cfg.UserServiceURL)
+	serviceRouter, err := handlers.NewServiceRouter(fallbackURL)
 	if err != nil {
 		log.Fatalf("Failed to create service router: %v", err)
 	}
@@ -150,13 +158,19 @@ func registerWithConsul(cfg *config.Config) {
 		hostname = "unknown"
 	}
 
+	// Nếu chạy ở local (cho debug), sử dụng localhost thay vì hostname
+	serviceAddress := hostname
+	if cfg.HostMode == "local" {
+		serviceAddress = "localhost"
+	}
+
 	registration := &consulapi.AgentServiceRegistration{
 		ID:      fmt.Sprintf("api-gateway-%s-%d", hostname, cfg.Port),
 		Name:    "api-gateway",
 		Port:    cfg.Port,
-		Address: hostname,
+		Address: serviceAddress,
 		Check: &consulapi.AgentServiceCheck{
-			HTTP:                           fmt.Sprintf("http://%s:%d/health", hostname, cfg.Port),
+			HTTP:                           fmt.Sprintf("http://%s:%d/health", serviceAddress, cfg.Port),
 			Interval:                       "10s",
 			Timeout:                        "1s",
 			DeregisterCriticalServiceAfter: "30s",

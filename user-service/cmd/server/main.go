@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -24,12 +25,22 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
-	// Parse command-line flags
+	// Parse command-line flags (chỉ ghi đè nếu được cung cấp)
 	flag.IntVar(&cfg.Port, "port", cfg.Port, "User service gRPC port")
 	flag.Parse()
 
+	// Log thông tin môi trường
+	log.Printf("Starting User Service in %s environment with host mode: %s", cfg.Environment, cfg.HostMode)
+
+	// Xác định địa chỉ lắng nghe - Quan trọng: sử dụng 0.0.0.0 để các container khác có thể kết nối
+	listenAddr := "0.0.0.0"
+	if cfg.HostMode == "local" && cfg.Environment == "development" {
+		// Khi debug local, có thể dùng localhost hoặc 0.0.0.0
+		listenAddr = "0.0.0.0" // Vẫn dùng 0.0.0.0 để các service Docker khác kết nối được
+	}
+
 	// Set up listener
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", listenAddr, cfg.Port))
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -57,7 +68,7 @@ func main() {
 
 	// Start gRPC server
 	go func() {
-		log.Printf("Starting User Service on port %d\n", cfg.Port)
+		log.Printf("Starting User Service on %s:%d\n", listenAddr, cfg.Port)
 		if err := server.Serve(lis); err != nil {
 			log.Fatalf("Failed to serve: %v", err)
 		}
@@ -77,7 +88,9 @@ func main() {
 // registerWithConsul registers the service with Consul
 func registerWithConsul(cfg *config.Config) {
 	consulConfig := consulapi.DefaultConfig()
-	consulConfig.Address = cfg.ConsulURL
+
+	// Sửa URL Consul để sử dụng IPv4
+	consulConfig.Address = strings.Replace(cfg.ConsulURL, "localhost", "127.0.0.1", 1)
 
 	client, err := consulapi.NewClient(consulConfig)
 	if err != nil {
@@ -90,13 +103,20 @@ func registerWithConsul(cfg *config.Config) {
 		hostname = "unknown"
 	}
 
+	// Xác định địa chỉ đăng ký với Consul
+	serviceAddress := hostname
+	if cfg.HostMode == "local" {
+		// Khi chạy debug local, đăng ký với Consul bằng localhost
+		serviceAddress = "localhost"
+	}
+
 	registration := &consulapi.AgentServiceRegistration{
 		ID:      fmt.Sprintf("user-service-%s-%d", hostname, cfg.Port),
 		Name:    "user-service",
 		Port:    cfg.Port,
-		Address: hostname,
+		Address: serviceAddress,
 		Check: &consulapi.AgentServiceCheck{
-			GRPC:                           fmt.Sprintf("%s:%d", hostname, cfg.Port),
+			GRPC:                           fmt.Sprintf("%s:%d", serviceAddress, cfg.Port),
 			Interval:                       "10s",
 			Timeout:                        "1s",
 			DeregisterCriticalServiceAfter: "30s",

@@ -8,8 +8,10 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
-      - USER_SERVICE_URL=http://user-service:9001
-      - CONSUL_URL=http://consul:8500
+      - USER_SERVICE_URL=user-service:9001
+      - CONSUL_URL=consul:8500
+      - APP_ENV=development
+      - HOST_MODE=docker
       - ENVIRONMENT=development
     depends_on:
       - user-service
@@ -27,7 +29,9 @@ services:
       - "9001:9001"
     environment:
       - PORT=9001
-      - CONSUL_URL=http://consul:8500
+      - CONSUL_URL=consul:8500
+      - APP_ENV=development
+      - HOST_MODE=docker
       - ENVIRONMENT=development
       - DB_HOST=postgres
       - DB_PORT=5432
