@@ -1,0 +1,4 @@
+[submodule "proto-definitions"]
+	path = proto-definitions
+	url = ./proto-definitions
+	branch = master 

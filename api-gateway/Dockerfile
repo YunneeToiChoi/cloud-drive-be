@@ -1,21 +1,27 @@
-# Dockerfile
-FROM golang:1.22-alpine AS builder
+FROM golang:1.19 AS builder
 
-# Tạo thư mục làm việc
+WORKDIR /build
+
+# Copy proto-definitions trước
+COPY proto-definitions/ /build/proto-definitions/
+
+# Copy api-gateway
+COPY api-gateway/ /build/api-gateway/
+
+WORKDIR /build/api-gateway
+
+# Build
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-s -w" -o app ./cmd/server
+
+FROM alpine:3.16
+
+RUN apk --no-cache add ca-certificates tzdata && \
+    update-ca-certificates
+
 WORKDIR /app
 
-# Copy toàn bộ mã nguồn vào container
-COPY . .
+COPY --from=builder /build/api-gateway/app /app/
 
-# Tải dependencies và build
-WORKDIR /app/api-gateway
-RUN go mod download
-RUN go build -o gateway main.go
+EXPOSE 8000
 
-# Stage 2: Build final image
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-COPY --from=builder /app/api-gateway/gateway .
-EXPOSE 8080
-CMD ["./gateway"]
+CMD ["/app/app"] 

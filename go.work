@@ -1,7 +1,0 @@
-go 1.20
-
-use (
-	./api-gateway
-	./common-lib
-	./user
-) 
