@@ -1,4 +1,4 @@
-FROM golang:1.19 AS builder
+FROM golang:1.23 AS builder
 
 WORKDIR /build
 
@@ -13,7 +13,7 @@ WORKDIR /build/api-gateway
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-s -w" -o app ./cmd/server
 
-FROM alpine:3.16
+FROM alpine:3.19
 
 RUN apk --no-cache add ca-certificates tzdata && \
     update-ca-certificates

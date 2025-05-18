@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/cloud-drive/api-gateway/internal/clients"
@@ -52,7 +53,25 @@ func main() {
 
 	// Get users
 	userRouter.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
-		// Implementation will be added later
+		log.Printf("Received request for /api/users")
+		ctx := r.Context()
+
+		log.Printf("Calling ListUsers with client: %v", userClient)
+		resp, err := userClient.ListUsers(ctx, 10, 0)
+		if err != nil {
+			log.Printf("Error calling ListUsers: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to get users: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Got response from ListUsers: %+v", resp)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Printf("Error encoding response: %v", err)
+			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("Successfully responded to /api/users")
 	}).Methods("GET")
 
 	// Create user
