@@ -37,11 +37,11 @@ func (s *UserService) CreateUser(ctx context.Context, req *user.CreateUserReques
 	now := time.Now()
 	userModel := &models.User{
 		ID:        uuid.New().String(),
-		Username:  req.Username,
 		Email:     req.Email,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Password:  string(hashedPassword),
+		Role:      req.Role,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -146,14 +146,48 @@ func (s *UserService) ListUsers(ctx context.Context, req *user.ListUsersRequest)
 	}, nil
 }
 
+// Authenticate xác thực người dùng bằng email và password
+func (s *UserService) Authenticate(ctx context.Context, req *user.AuthRequest) (*user.UserResponse, error) {
+	// Tìm người dùng theo email
+	userModel, err := s.repo.FindByEmail(req.Email)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "user not found")
+	}
+
+	// Kiểm tra mật khẩu
+	if !s.verifyPassword(userModel.Password, req.Password) {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
+	}
+
+	// Chuyển đổi model thành proto message
+	pbUser := convertUserToProto(userModel)
+
+	return &user.UserResponse{User: pbUser}, nil
+}
+
+// verifyPassword kiểm tra xem mật khẩu có chính xác không
+func (s *UserService) verifyPassword(hashedPassword, password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	return err == nil
+}
+
+// hashPassword mã hóa mật khẩu với bcrypt
+func (s *UserService) hashPassword(password string) (string, error) {
+	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedBytes), nil
+}
+
 // convertUserToProto converts a user model to a proto user
 func convertUserToProto(userModel *models.User) *user.User {
 	return &user.User{
 		Id:        userModel.ID,
-		Username:  userModel.Username,
 		Email:     userModel.Email,
 		FirstName: userModel.FirstName,
 		LastName:  userModel.LastName,
+		Role:      userModel.Role,
 		CreatedAt: userModel.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: userModel.UpdatedAt.Format(time.RFC3339),
 	}

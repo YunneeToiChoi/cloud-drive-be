@@ -24,6 +24,15 @@ type UserClientResponse struct {
 	Users []*user.User `json:"users"`
 }
 
+// CreateUserRequest là request cho việc tạo người dùng
+type CreateUserRequest struct {
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Role      string `json:"role"`
+}
+
 // NewUserClient creates a new user service client
 func NewUserClient(consulURL string, fallbackURL string) (*UserClient, error) {
 	serviceID := "user-service"
@@ -150,4 +159,15 @@ func (c *UserClient) DeleteUser(ctx context.Context, id string) (*user.DeleteUse
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return c.client.DeleteUser(ctx, &user.DeleteUserRequest{Id: id})
+}
+
+// Authenticate xác thực người dùng
+func (c *UserClient) Authenticate(ctx context.Context, email, password string) (*user.UserResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	return c.client.Authenticate(ctx, &user.AuthRequest{
+		Email:    email,
+		Password: password,
+	})
 }

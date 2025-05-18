@@ -3,15 +3,18 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 // Config holds the application configuration
 type Config struct {
-	Environment string
-	Port        int
-	ConsulURL   string
-	HostMode    string
-	LogLevel    string
+	Environment   string
+	Port          int
+	ConsulURL     string
+	HostMode      string
+	LogLevel      string
+	JWTSecret     string
+	JWTExpiration time.Duration
 }
 
 // LoadConfig loads the application configuration from environment variables
@@ -58,6 +61,11 @@ func LoadConfig() *Config {
 		portStr = getEnv(envPrefix+"API_GATEWAY_PORT", "8080")
 	}
 	cfg.Port, _ = strconv.Atoi(portStr)
+
+	// JWT Configuration
+	cfg.JWTSecret = getEnv(envPrefix+"JWT_SECRET", "default_jwt_secret_key")
+	jwtExpirationStr := getEnv("JWT_EXPIRATION", "24h")
+	cfg.JWTExpiration, _ = time.ParseDuration(jwtExpirationStr)
 
 	return cfg
 }

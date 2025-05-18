@@ -8,6 +8,7 @@ import (
 	"github.com/cloud-drive/api-gateway/internal/clients"
 	"github.com/cloud-drive/api-gateway/internal/config"
 	"github.com/cloud-drive/api-gateway/internal/handlers"
+	"github.com/cloud-drive/api-gateway/internal/middleware"
 	"github.com/gorilla/mux"
 	consulapi "github.com/hashicorp/consul/api"
 	"log"
@@ -56,11 +57,26 @@ func main() {
 		w.Write([]byte("API Gateway is healthy"))
 	})
 
+	// Đăng ký các route xác thực
+	handlers.RegisterAuthRoutes(router, userClient, cfg)
+
+	// Middleware xác thực JWT
+	authMiddleware := middleware.AuthMiddleware(cfg)
+
 	// API endpoints for user service
 	userRouter := router.PathPrefix("/api/users").Subrouter()
+	// Áp dụng middleware xác thực cho tất cả các route user
+	userRouter.Use(authMiddleware)
 
-	// Get users
+	// Get users - cần quyền admin
 	userRouter.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+		// Kiểm tra role admin
+		claims, ok := r.Context().Value("claims").(*middleware.Claims)
+		if !ok || claims.Role != "admin" {
+			http.Error(w, "Forbidden - requires admin privileges", http.StatusForbidden)
+			return
+		}
+
 		log.Printf("Received request for /api/users")
 		ctx := r.Context()
 
@@ -82,23 +98,57 @@ func main() {
 		log.Printf("Successfully responded to /api/users")
 	}).Methods("GET")
 
-	// Create user
+	// Create user - chỉ admin mới được tạo người dùng (endpoint này khác với register)
 	userRouter.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+		// Kiểm tra role admin
+		claims, ok := r.Context().Value("claims").(*middleware.Claims)
+		if !ok || claims.Role != "admin" {
+			http.Error(w, "Forbidden - requires admin privileges", http.StatusForbidden)
+			return
+		}
+
 		// Implementation will be added later
 	}).Methods("POST")
 
-	// Get user by ID
+	// Get user by ID - người dùng chỉ xem được thông tin của chính mình, admin xem được tất cả
 	userRouter.HandleFunc("/{id}", func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		// Chỉ cho phép xem thông tin của chính mình hoặc là admin
+		claims, ok := r.Context().Value("claims").(*middleware.Claims)
+		if !ok || (claims.UserID != id && claims.Role != "admin") {
+			http.Error(w, "Forbidden - you can only access your own information", http.StatusForbidden)
+			return
+		}
+
 		// Implementation will be added later
 	}).Methods("GET")
 
-	// Update user
+	// Update user - người dùng chỉ cập nhật được thông tin của chính mình
 	userRouter.HandleFunc("/{id}", func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		// Chỉ cho phép cập nhật thông tin của chính mình hoặc là admin
+		claims, ok := r.Context().Value("claims").(*middleware.Claims)
+		if !ok || (claims.UserID != id && claims.Role != "admin") {
+			http.Error(w, "Forbidden - you can only update your own information", http.StatusForbidden)
+			return
+		}
+
 		// Implementation will be added later
 	}).Methods("PUT")
 
-	// Delete user
+	// Delete user - chỉ admin mới được xóa người dùng
 	userRouter.HandleFunc("/{id}", func(w http.ResponseWriter, r *http.Request) {
+		// Kiểm tra role admin
+		claims, ok := r.Context().Value("claims").(*middleware.Claims)
+		if !ok || claims.Role != "admin" {
+			http.Error(w, "Forbidden - requires admin privileges", http.StatusForbidden)
+			return
+		}
+
 		// Implementation will be added later
 	}).Methods("DELETE")
 

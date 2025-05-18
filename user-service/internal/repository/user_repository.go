@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/cloud-drive/user-service/internal/models"
 	"github.com/google/uuid"
+	"sync"
 )
 
 var (
@@ -23,11 +25,13 @@ type UserRepository interface {
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, limit, offset int) ([]*models.User, error)
+	FindByEmail(email string) (*models.User, error)
 }
 
 // InMemoryUserRepository is an in-memory implementation of UserRepository
 type InMemoryUserRepository struct {
 	users map[string]*models.User
+	mu    sync.RWMutex
 }
 
 // NewInMemoryUserRepository creates a new in-memory user repository
@@ -126,4 +130,18 @@ func (r *InMemoryUserRepository) List(ctx context.Context, limit, offset int) ([
 	}
 
 	return users[offset:end], nil
+}
+
+// FindByEmail tìm người dùng theo email
+func (r *InMemoryUserRepository) FindByEmail(email string) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, user := range r.users {
+		if user.Email == email {
+			return user, nil
+		}
+	}
+
+	return nil, fmt.Errorf("user not found with email: %s", email)
 }
