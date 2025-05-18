@@ -57,6 +57,16 @@ cd deployments/docker
 docker-compose up -d
 ```
 
+**RESET DOCKER**
+```bash
+cd deployments/docker
+docker stop $(docker ps -aq) 2>/dev/null || true && \
+docker rm -f $(docker ps -aq) 2>/dev/null || true && \
+docker rmi -f $(docker images -aq) 2>/dev/null || true && \
+docker builder prune -a -f && \
+docker-compose   build --no-cache && \
+docker-compose  up -d --force-recreate
+```
 Kiểm tra trạng thái:
 ```bash
 docker-compose ps
